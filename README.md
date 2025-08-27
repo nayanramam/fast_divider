@@ -19,7 +19,9 @@ Divider 2 Workplan
 
 RISC V
 https://five-embeddev.com/riscv-user-isa-manual/Priv-v1.12/m.html
+
 https://drive.google.com/file/d/1uviu1nH-tScFfgrovvFCrj7Omv8tFtkp/view (page 69)
+
 [gtvault.sharepoint.com/:b:/s/SiliconJackets/ETS5XE7YGclJvGvhd_CnpBkB4a1UOfz6EjViLXB3YsWbZQ?e=6liBHK](https://gtvault.sharepoint.com/sites/SiliconJackets/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FSiliconJackets%2FShared%20Documents%2FDigital%20Design%20Subteam%2FResources%2Friscv%2Dspec%2Dv2%2E2%2Epdf&parent=%2Fsites%2FSiliconJackets%2FShared%20Documents%2FDigital%20Design%20Subteam%2FResources&p=true&ga=1) (page 36)
 
 
