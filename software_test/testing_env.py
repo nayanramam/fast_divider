@@ -5,6 +5,7 @@ import math
 
 def test_divider(divider_func, a, b, expected_quotient, expected_remainder):
     quotient, remainder, iterations = divider_func(a, b)
+    print(f"Quotient: {quotient}, Remainder: {remainder}, Iterations: {iterations}")
     assert quotient == expected_quotient, f"Expected quotient {expected_quotient}, got {quotient}"
     assert remainder == expected_remainder, f"Expected remainder {expected_remainder}, got {remainder}"
     print(f"Iterations: {iterations}")
@@ -40,7 +41,7 @@ if __name__ == "__main__":
         total_iter_nr_v2 += test_divider(div_nr_v2, a, b, expected_quotient, expected_remainder)
 
         print("Division by Gold-Schmidt:")
-        total_iter_gs += test_divider(div_gs, a, b, expected_quotient, expected_remainder)
+        total_iter_gs += test_divider(div_gs_v3, a, b, expected_quotient, expected_remainder)
 
     print(f"Total iterations - Repeated Subtraction: {total_iter_rs}, Newton-Raphson (LUT): {total_iter_nr}, Newton-Raphson v2: {total_iter_nr_v2}, Gold Schmidt: {total_iter_gs}")
 
