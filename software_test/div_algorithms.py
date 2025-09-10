@@ -1,7 +1,5 @@
 from math import trunc
 
-from math import trunc
-
 
 def div_gs_v3(N: int, D: int):
     """
