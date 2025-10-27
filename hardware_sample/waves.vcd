@@ -1,0 +1,68 @@
+$date
+	Mon Sep 29 16:53:29 2025
+$end
+$version
+	Icarus Verilog
+$end
+$timescale
+	1ps
+$end
+$scope module flipflop_tb $end
+$var wire 1 ! q_o $end
+$var reg 1 " clk_i $end
+$var reg 1 # d_i $end
+$var reg 1 $ reset_i $end
+$scope module dut $end
+$var wire 1 " clk_i $end
+$var wire 1 # d_i $end
+$var wire 1 $ reset_i $end
+$var reg 1 ! q_o $end
+$upscope $end
+$scope task tick $end
+$upscope $end
+$upscope $end
+$enddefinitions $end
+#0
+$dumpvars
+1$
+0#
+0"
+0!
+$end
+#5000
+1"
+#10000
+0"
+#15000
+1"
+#20000
+0"
+#25000
+1!
+1#
+0$
+1"
+#30000
+0"
+#35000
+0!
+0#
+1"
+#40000
+0"
+#45000
+1!
+1#
+1"
+#50000
+0!
+1$
+0"
+#55000
+1!
+0$
+1"
+#60000
+0"
+#65000
+1"

@@ -2,6 +2,94 @@ from math import trunc
 
 from math import isfinite, trunc
 
+def div_gs_v4(N: int, D: int):
+    """
+    Goldschmidt division (float prototype, unsigned).
+    Returns (Q, R, iters) with Q = trunc(N/D), R = N - D*Q.
+    """
+    # Normalize so d0 in [0.5, 1).  For integer D, let s = bitlen - 1:
+    # D in [2^s, 2^(s+1)-1]  => d0 = D / 2^(s+1) ∈ [0.5, 1)
+    s = D.bit_length()
+    n = N / (2**s)    # equivalent too N >> s but with decimal
+    d = D / (2**s)
+
+    # Initial factor. With d in [0.5,1), F0 = 2 - d is a decent first step.
+    F = 2.0 - d
+
+    n_new = float(2**32)
+    d_new = float(2**32)
+    n_prev = n
+    d_prev = d
+    change = float(2**32)
+
+    iter = 0
+
+    while change:
+        n_new = n_prev * F
+        d_new = d_prev * F
+        F = 2.0 - d_new
+        #change = n_new - n_prev
+        threshold = n / (2**16)   # G >> 16
+        diff = n_new - n_prev
+        change = (diff > threshold)
+
+        n_prev = n_new
+        d_prev = d_new
+        iter += 1
+
+    # Correct residue into [0, D) --> done outside of the algorithm core
+    Q = trunc(n_new)
+    R = N - (D * Q)
+
+    if R >= D:
+        Q += 1
+        R -= D
+
+    return Q, R, iter
+
+
+def div_gs_v3(N: int, D: int):
+    """
+    Goldschmidt division (float prototype, unsigned).
+    Returns (Q, R, iters) with Q = trunc(N/D), R = N - D*Q.
+    """
+    # Normalize so d0 in [0.5, 1).  For integer D, let s = bitlen - 1:
+    # D in [2^s, 2^(s+1)-1]  => d0 = D / 2^(s+1) ∈ [0.5, 1)
+    s = D.bit_length()
+    n = N / (2**s)    # equivalent too N >> s but with decimal
+    d = D / (2**s)
+
+    # Initial factor. With d in [0.5,1), F0 = 2 - d is a decent first step.
+    F = 2.0 - d
+
+    n_new = float(2**32)
+    d_new = float(2**32)
+    n_prev = n
+    d_prev = d
+    change = float(2**32)
+
+    iter = 0
+    
+
+    while change > n/100000:
+        n_new = n_prev * F
+        d_new = d_prev * F
+        F = 2.0 - d_new
+        change = n_new - n_prev
+        n_prev = n_new
+        d_prev = d_new
+        iter += 1
+
+    # Correct residue into [0, D)
+    Q = trunc(n_new)
+    R = N - (D * Q)
+
+    if R >= D:
+        Q += 1
+        R -= D
+
+    return Q, R, iter
+
 def div_gs_v2(N: int, D: int, max_iters: int = 30):
     """
     Goldschmidt division (float prototype, unsigned).
@@ -116,6 +204,7 @@ def div_gs_v1(N, D):
 
 
 
+
 # Precompute a small lookup table for the reciprocal initial guess in [1, 2)
 # The table stores approximations to 1/x for representative points across [1, 2)
 _RECIP_LUT = [1.0 / (1.0 + (i + 0.5) / 16.0) for i in range(16)]
@@ -169,7 +258,17 @@ def div_nr(N, D, G=None):
 #print(div_nr(24, 6))
 
 
+
+
+
+
+
+
 LUT = [1.0 / (1 << i) for i in range(0, 33)]
+
+for i in LUT:
+    i = round(i, 15)
+
 
 def div_nr_v2 (N, D, G=None):
 
@@ -209,7 +308,50 @@ def div_nr_v2 (N, D, G=None):
 #print(div_nr(24, 6))
 
 
+def div_nr_v3 (N, D, G=None):
 
+
+    bitlen = D.bit_length()
+    k = bitlen
+    #G =  1/(1 << k)
+    G = LUT[k]
+
+
+
+
+    change = 1 #just initializing
+    G_prev = G
+    G_new = G
+    iter = 0
+
+    while change:
+        #G_new = G * (2 - D * G)  convert from 3 mults to 2 mults and 1 shift
+        tmp  = G * G     # one multiply
+        tmp2 = D * tmp   # second multiply
+        G_new = (G * 2) - tmp2  # multiply by 2 is just a shift
+
+        #print(f"Iteration {iter}: G = {G_new}")
+
+        #change = abs(G_new - G_prev)
+        threshold = G / (2**16)   # G >> 16
+        diff = G_new - G_prev
+        change = (diff > threshold) or (diff < -threshold) # easier than abs calculating
+
+        G_prev = G_new
+        G = G_new
+
+        iter += 1
+    
+    #print(f"Iteration {iter}: G = {G_new}")
+
+    Q = trunc(N * G)
+    R = N - D * Q
+
+    if R >= D:
+        Q += 1
+        R -= D
+
+    return Q, R, iter
 
 
 

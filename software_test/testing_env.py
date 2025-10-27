@@ -16,10 +16,14 @@ if __name__ == "__main__":
     total_iter_rs = 0
     total_iter_nr = 0
     total_iter_nr_v2 = 0
-    total_iter_gs = 0
-    for i in range(100):
+    total_iter_nr_v3 = 0
+    total_iter_gs_v3 = 0
+    total_iter_gs_v4 = 0
+
+    #random.seed(42)  # For reproducibility
+    for i in range(1000):
         a = random.randint(1, 2**32 - 1)
-        b = random.randint(1, 2**32 - 1)
+        b = random.randint(1, 2**2 - 1)
         expected_quotient = a // b
         expected_remainder = a % b
 
@@ -39,11 +43,16 @@ if __name__ == "__main__":
         print("Division by Newton-Raphson v2:")
         total_iter_nr_v2 += test_divider(div_nr_v2, a, b, expected_quotient, expected_remainder)
 
+        print("Division by Newton-Raphson v3:")
+        total_iter_nr_v3 += test_divider(div_nr_v3, a, b, expected_quotient, expected_remainder)
+
         print("Division by Gold-Schmidt:")
-        total_iter_gs += test_divider(div_gs, a, b, expected_quotient, expected_remainder)
+        total_iter_gs_v3 += test_divider(div_gs_v3, a, b, expected_quotient, expected_remainder)
 
-    print(f"Total iterations - Repeated Subtraction: {total_iter_rs}, Newton-Raphson (LUT): {total_iter_nr}, Newton-Raphson v2: {total_iter_nr_v2}, Gold Schmidt: {total_iter_gs}")
+        print("Division by Gold-Schmidt:")
+        total_iter_gs_v4 += test_divider(div_gs_v4, a, b, expected_quotient, expected_remainder)
 
+    print(f"Total iterations - Repeated Subtraction: {total_iter_rs/1000}, Newton-Raphson (LUT): {total_iter_nr/1000}, Newton-Raphson v2: {total_iter_nr_v2/1000}, Newton-Raphson v3: {total_iter_nr_v3/1000}, Gold-Schmidt v3: {total_iter_gs_v3/1000}, Gold-Schmidt v4: {total_iter_gs_v4/1000}")
 
     # Fixed test cases
     #test_divider(standard_division, 10, 3, 3, 1)
