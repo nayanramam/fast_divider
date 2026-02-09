@@ -12,7 +12,7 @@
 //   This is educational, not practical for performance.
 module divider_core (
     input  logic        clk,
-    input  logic        rst,
+    input  logic        rst_n,
 
     input  logic        start_calc,
     input  logic [31:0] numerator,
@@ -30,8 +30,8 @@ module divider_core (
   logic [31:0] den_latched;
   logic [31:0] quot;
 
-  always_ff @(posedge clk or posedge rst) begin
-    if (rst) begin
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
       state         <= IDLE;
       done_calc     <= 1'b0;
       div_output    <= 32'd0;

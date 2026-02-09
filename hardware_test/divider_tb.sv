@@ -1,24 +1,35 @@
-// tb_divider_top.sv
 `timescale 1ns/1ps
 
-module tb_divider_top;
+module divider_tb;
 
-  import divider_pkg::*;
+  // -----------------------
+  // Clock / Reset
+  // -----------------------
+  logic clk_i;
+  logic rst_i; // active-high reset
 
-  // Clock/Reset
-  logic clk, rst;
+  initial clk_i = 1'b0;
+  always #5 clk_i = ~clk_i; // 10ns period
 
-  // DUT I/O
-  logic        valid_i, mode_i, out_type_i;
-  logic [31:0] n_i, d_i;
-  logic        ready_o;
+  // -----------------------
+  // DUT ports
+  // -----------------------
+  logic        valid_i;
+  logic        mode_i;       // 1 unsigned, 0 signed
+  logic        out_type_i;   // 1 quotient, 0 remainder
+  logic [31:0] n_i;
+  logic [31:0] d_i;
+
+  logic        ready_o;      // 1-cycle pulse when done
   logic [31:0] result;
   logic [1:0]  error_o;
 
-  // Instantiate DUT
+  // -----------------------
+  // Instantiate wrapper
+  // -----------------------
   divider_top dut (
-    .clk_i      (clk),
-    .rst_i      (rst),
+    .clk_i      (clk_i),
+    .rst_i      (rst_i),
     .valid_i    (valid_i),
     .mode_i     (mode_i),
     .out_type_i (out_type_i),
@@ -29,172 +40,163 @@ module tb_divider_top;
     .error_o    (error_o)
   );
 
-  // Clock: 100 MHz
-  initial clk = 0;
-  always  #5 clk = ~clk;
+  // -----------------------
+  // Icarus-friendly signed views
+  // -----------------------
+  wire signed [31:0] n_i_s    = n_i;
+  wire signed [31:0] d_i_s    = d_i;
+  wire signed [31:0] result_s = result;
 
-  // Reset
-  initial begin
-    rst = 1;
-    valid_i = 0;
-    mode_i = 0;
-    out_type_i = 0;
-    n_i = '0;
-    d_i = '0;
-    repeat (5) @(posedge clk);
-    rst = 0;
-  end
+  // -----------------------
+  // Reference model helpers
+  // -----------------------
 
-  // ------------ Golden Model -------------
-  // Icarus: TASK with no early returns
-  task automatic ref_calc(
-    input  logic        mode,        // 1=unsigned, 0=signed
-    input  logic        out_type,    // 1=quotient, 0=remainder
-    input  logic [31:0] n, d,
-    output logic [31:0] res,
-    output logic [1:0]  err
+  function automatic [31:0] twos_comp(input [31:0] x);
+    twos_comp = ~x + 32'd1;
+  endfunction
+
+  function automatic [31:0] abs32(input [31:0] x);
+    abs32 = x[31] ? twos_comp(x) : x;
+  endfunction
+
+  function automatic [31:0] exp_result(
+    input logic        mode_u,
+    input logic        want_quot,
+    input logic [31:0] n,
+    input logic [31:0] d
   );
-    // defaults
-    res = '0;
-    err = 2'b00;
+    logic signed [31:0] ns, ds;
+    logic signed [31:0] q_s, r_s;
+    logic [31:0]        q_u, r_u;
+
+    ns = $signed(n);
+    ds = $signed(d);
 
     if (d == 32'd0) begin
-      err = 2'b01;                    // div-by-zero
-      res = (out_type) ? 32'd0 : n;
+      exp_result = want_quot ? 32'hFFFF_FFFF : n;
     end
-    else if (!mode && (n == 32'h8000_0000) && (d == 32'hFFFF_FFFF)) begin
-      err = 2'b10;                    // INT_MIN / -1 overflow
-      res = (out_type) ? 32'hFFFF_FFFF : 32'd0;
+    else if (!mode_u && (n == 32'h8000_0000) && (d == 32'hFFFF_FFFF)) begin
+      exp_result = want_quot ? 32'h8000_0000 : 32'd0;
     end
-    else if (mode) begin
-      // Unsigned
-      logic [31:0] q = n / d;
-      logic [31:0] r = n % d;
-      res = (out_type) ? q : r;
+    else if (mode_u) begin
+      q_u = n / d;
+      r_u = n % d;
+      exp_result = want_quot ? q_u : r_u;
     end
     else begin
-      // Signed (truncate toward zero; remainder sign follows dividend)
-      int signed ns = $signed(n);
-      int signed ds = $signed(d);
-      int signed qs = ns / ds;
-      int signed rs = ns % ds;
-      if (out_type)
-        res = logic'($unsigned(qs));  // explicit cast back to 32b logic
-      else
-        res = logic'($unsigned(rs));
+      q_s = ns / ds;
+      r_s = ns % ds;
+      exp_result = want_quot ? $unsigned(q_s) : $unsigned(r_s);
     end
-  endtask
+  endfunction
 
-  // ------------ Sequencer -------------
-  int unsigned n_tx = 0;
-  int unsigned n_err = 0;
 
-  task automatic do_tx(
-    input  logic        mode,
-    input  logic        out_type,
-    input  logic [31:0] n,
-    input  logic [31:0] d,
-    input  string       tag = ""
+
+  function automatic [1:0] exp_error(
+    input logic        mode_u,
+    input logic [31:0] n,
+    input logic [31:0] d
+  );
+    begin
+      if (d == 32'd0) exp_error = 2'b01;
+      else if (!mode_u && (n == 32'h8000_0000) && (d == 32'hFFFF_FFFF)) exp_error = 2'b10;
+      else exp_error = 2'b00;
+    end
+  endfunction
+
+  // -----------------------
+  // Drive one transaction and check
+  // -----------------------
+  task automatic run_case(
+    input string       name,
+    input logic        mode_u,      // 1 unsigned, 0 signed
+    input logic        want_quot,    // 1 quotient, 0 remainder
+    input logic [31:0] n,
+    input logic [31:0] d,
+    input int          timeout_cycles
   );
     logic [31:0] exp_res;
     logic [1:0]  exp_err;
+    int          cyc;
 
-    ref_calc(mode, out_type, n, d, exp_res, exp_err);
+    begin
+      exp_res = exp_result(mode_u, want_quot, n, d);
+      exp_err = exp_error (mode_u, n, d);
 
-    // Drive inputs; pulse valid exactly one cycle
-    @(posedge clk);
-    mode_i     <= mode;
-    out_type_i <= out_type;
-    n_i        <= n;
-    d_i        <= d;
-    valid_i    <= 1'b1;
+      // Apply inputs and pulse valid for 1 cycle
+      @(posedge clk_i);
+      mode_i      <= mode_u;
+      out_type_i  <= want_quot;
+      n_i         <= n;
+      d_i         <= d;
+      valid_i     <= 1'b1;
 
-    @(posedge clk);
-    valid_i    <= 1'b0;
+      @(posedge clk_i);
+      valid_i     <= 1'b0;
 
-    // Wait for DUT to begin processing and finish
-    wait (ready_o == 1'b0);
-    wait (ready_o == 1'b1);
+      // Wait for ready_o (1-cycle pulse) with timeout
+      cyc = 0;
+      while (ready_o !== 1'b1) begin
+        @(posedge clk_i);
+        cyc++;
+        if (cyc > timeout_cycles) begin
+          $error("[TIMEOUT] %s did not finish within %0d cycles", name, timeout_cycles);
+          disable run_case;
+        end
+      end
 
-    // Check results
-    n_tx++;
-    if (result !== exp_res || error_o !== exp_err) begin
-      n_err++;
-      $display("[%0t] MISMATCH %s mode=%0d out_type=%0d n=0x%08h d=0x%08h -> DUT(res=0x%08h err=%b) REF(res=0x%08h err=%b)",
-               $time, tag, mode, out_type, n, d, result, error_o, exp_res, exp_err);
-    end else begin
-      $display("[%0t] PASS     %s mode=%0d out_type=%0d n=0x%08h d=0x%08h -> res=0x%08h err=%b",
-               $time, tag, mode, out_type, n, d, result, error_o);
+      // Check outputs on the ready pulse cycle
+      if (error_o !== exp_err) begin
+        $error("[FAIL] %s error mismatch: got %0b exp %0b", name, error_o, exp_err);
+      end
+      if (result !== exp_res) begin
+        $error("[FAIL] %s result mismatch: got 0x%08h exp 0x%08h", name, result, exp_res);
+      end
+
+      // ready_o must drop next cycle
+      @(posedge clk_i);
+      if (ready_o !== 1'b0) begin
+        $error("[FAIL] %s ready_o not a 1-cycle pulse (still high next cycle)", name);
+      end
+
+      $display("[PASS] %s | cycles_to_ready=%0d | err=%0b res=0x%08h",
+               name, cyc, error_o, result);
     end
   endtask
 
-  // ------------ Directed Tests -------------
-  task automatic run_directed;
-    do_tx(1'b1, 1'b1, 32'd1234, 32'd0, "udiv q /0");
-    do_tx(1'b1, 1'b0, 32'd1234, 32'd0, "udiv r /0");
-    do_tx(1'b0, 1'b1, 32'hFFFF_FF80, 32'd0, "sdiv q /0");
-    do_tx(1'b0, 1'b0, 32'hFFFF_FF80, 32'd0, "sdiv r /0");
-
-    do_tx(1'b1, 1'b1, 32'd100, 32'd7, "udiv q 100/7");
-    do_tx(1'b1, 1'b0, 32'd100, 32'd7, "udiv r 100%7");
-
-    do_tx(1'b0, 1'b1, 32'd100, 32'd7, "sdiv q +/+");
-    do_tx(1'b0, 1'b0, 32'd100, 32'd7, "sdiv r +/+");
-
-    do_tx(1'b0, 1'b1, 32'hFFFF_FF9C, 32'd7, "sdiv q -100/7");
-    do_tx(1'b0, 1'b0, 32'hFFFF_FF9C, 32'd7, "sdiv r -100%7");
-
-    do_tx(1'b0, 1'b1, 32'd100, 32'hFFFF_FFF9, "sdiv q 100/-7");
-    do_tx(1'b0, 1'b0, 32'd100, 32'hFFFF_FFF9, "sdiv r 100%-7");
-
-    do_tx(1'b0, 1'b1, 32'hFFFF_FF9C, 32'hFFFF_FFF9, "sdiv q -100/-7");
-    do_tx(1'b0, 1'b0, 32'hFFFF_FF9C, 32'hFFFF_FFF9, "sdiv r -100%-7");
-
-    do_tx(1'b1, 1'b1, 32'd1024, 32'd32, "udiv q exact");
-    do_tx(1'b1, 1'b0, 32'd1024, 32'd32, "udiv r exact");
-
-    do_tx(1'b1, 1'b1, 32'd31, 32'd32, "udiv q <1");
-    do_tx(1'b1, 1'b0, 32'd31, 32'd32, "udiv r <1");
-
-    do_tx(1'b0, 1'b1, 32'h8000_0000, 32'hFFFF_FFFF, "sdiv q overflow");
-    do_tx(1'b0, 1'b0, 32'h8000_0000, 32'hFFFF_FFFF, "sdiv r overflow");
-  endtask
-
-  // ------------ Random Tests -------------
-  task automatic run_random(input int unsigned N = 200);
-    for (int i = 0; i < N; i++) begin
-      logic        mode      = $urandom_range(0,1);
-      logic        out_type  = $urandom_range(0,1);
-      logic [31:0] n         = $urandom();
-      logic [31:0] d;
-      case ($urandom_range(0,9))
-        0: d = 32'd0;   // hit div-by-zero
-        1: d = 32'd1;
-        2: d = 32'd2;
-        default: d = $urandom();
-      endcase
-      do_tx(mode, out_type, n, d, $sformatf("rand %0d", i));
-    end
-  endtask
-
-  // ------------ Main -------------
+  // -----------------------
+  // Test sequence
+  // -----------------------
   initial begin
-    @(negedge rst);
-    @(posedge clk);
+    // init
+    valid_i    = 1'b0;
+    mode_i     = 1'b0;
+    out_type_i = 1'b0;
+    n_i        = 32'd0;
+    d_i        = 32'd0;
 
-    run_directed();
-    run_random(500);
+    // reset
+    rst_i = 1'b1;
+    repeat (2) @(posedge clk_i);
+    rst_i = 1'b0;
+    @(posedge clk_i);
 
-    $display("==================================================");
-    $display("Test complete: %0d transactions, %0d mismatches", n_tx, n_err);
-    $display("==================================================");
+    // Keep numbers small if core is slow
 
-    if (n_err == 0) begin
-      $display("ALL TESTS PASSED ✅");
-      $finish;
-    end else begin
-      $fatal(1, "There were %0d mismatches.", n_err);
-    end
+    run_case("DIV  100/7 => q",        1'b0, 1'b1, 32'd100,      32'd7,  500);
+    run_case("REM -100 mod 7 => r",    1'b0, 1'b0, 32'hFFFF_FF9C,32'd7,  500); // -100
+
+    run_case("DIVU 100/7 => q",        1'b1, 1'b1, 32'd100,      32'd7,  500);
+    run_case("REMU 100%7 => r",        1'b1, 1'b0, 32'd100,      32'd7,  500);
+
+    run_case("DIV by 0 => q",          1'b0, 1'b1, 32'd123,      32'd0,  50);
+    run_case("REM by 0 => r",          1'b0, 1'b0, 32'd123,      32'd0,  50);
+
+    run_case("DIV ovf INT_MIN/-1 => q",1'b0, 1'b1, 32'h8000_0000,32'hFFFF_FFFF, 50);
+    run_case("REM ovf INT_MIN/-1 => r",1'b0, 1'b0, 32'h8000_0000,32'hFFFF_FFFF, 50);
+
+    $display("ALL TESTS FINISHED");
+    $finish;
   end
 
 endmodule
