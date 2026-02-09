@@ -1,3 +1,9 @@
+## How to run
+iverilog -g2012 -s divider_tb   -o sim.vvp divider_core.sv  divider_tb.sv divider_top.sv
+
+vvp sim.vvp
+
+
 NR block diagram: https://drive.google.com/file/d/1j90D19xMYoPvntIMmEMO7JHbfjNIhxzR/view?usp=drive_link
 
 
