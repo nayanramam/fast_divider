@@ -59,7 +59,7 @@ module divider_top (
     //========================
     // Divider core instantiation
     //========================
-    divider_core divider(
+    divider_core_goldschmidt divider( // divider_core or divider_core_goldschmidt
         .clk(clk_i),
         .rst(rst_i),
         .start_calc(start_calc_int),
