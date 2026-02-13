@@ -1,8 +1,7 @@
+// Reduced states: START (latch+dispatch), SHIFT, DIV_ITER, DIV_FIN, FINISHED (early-exit only)
 typedef enum logic [2:0] {
     START,
-    CHECK_ZERO,
     SHIFT,
-    DIV_START,
     DIV_ITER,
     DIV_FIN,
     FINISHED
@@ -40,8 +39,9 @@ module divider_core_newtraph
     logic [31:0] result_q_reg, result_r_reg;  // latched so outputs valid when done_calc=1
     logic [31:0] result_q_comb, result_r_comb;
 
-    assign div_output    = result_q_reg;
-    assign div_remainder = result_r_reg;
+    // Output from comb when we complete in SHIFT/DIV_FIN (same-cycle done); else from reg (early exit)
+    assign div_output    = (state == SHIFT || state == DIV_FIN) ? result_q_comb : result_q_reg;
+    assign div_remainder = (state == SHIFT || state == DIV_FIN) ? result_r_comb : result_r_reg;
 
     always_ff @(posedge clk) begin
         if (rst) begin
@@ -56,8 +56,8 @@ module divider_core_newtraph
             d_reg <= next_d;
             g_prev <= g_new;
             iter_cnt <= next_iter_cnt;
-            // Latch Q,R when transitioning to FINISHED so outputs stay valid for done_calc cycle
-            if (state == DIV_FIN || state == SHIFT || (state == CHECK_ZERO && (!d_reg || !n_reg))) begin
+            // Latch Q,R only for START early-exit path (div0 / n=0)
+            if (state == START && start_calc && (denominator == 32'd0 || numerator == 32'd0)) begin
                 result_q_reg <= result_q_comb;
                 result_r_reg <= result_r_comb;
             end
@@ -75,48 +75,34 @@ module divider_core_newtraph
         next_d = d_reg;
 
         case (state)
+            // Latch N,D and dispatch in one cycle: early exit -> FINISHED, power-of-2 -> SHIFT, else -> DIV_ITER (g loaded here, skip DIV_START)
             START: begin
                 if (start_calc) begin
-                    //$display("[newtraph] START start_calc N=%0d D=%0d", numerator, denominator);
                     next_n = numerator;
                     next_d = denominator;
-                    next_state = CHECK_ZERO;
-                end
-            end
-
-            CHECK_ZERO: begin
-                if (!d_reg) begin
-                    //$display("[newtraph] CHECK_ZERO div_by_zero -> Q=0 R=%0d", n_reg);
-                    result_q_comb = '0;
-                    result_r_comb = n_reg;
-                    next_state = FINISHED;
-                end else if (!n_reg) begin
-                    //$display("[newtraph] CHECK_ZERO n=0 -> Q=0 R=0");
-                    result_q_comb = '0;
-                    result_r_comb = '0;
-                    next_state = FINISHED;
-                end else if ((d_reg & (d_reg - 1)) == 0) begin  // power of 2
-                    //$display("[newtraph] CHECK_ZERO d power-of-2 -> SHIFT");
-                    next_state = SHIFT;
-                end else begin
-                    //$display("[newtraph] CHECK_ZERO n_reg=%0d d_reg=%0d -> DIV_START", n_reg, d_reg);
-                    next_state = DIV_START;
+                    if (denominator == 32'd0) begin
+                        result_q_comb = '0;
+                        result_r_comb = numerator;
+                        next_state = FINISHED;
+                    end else if (numerator == 32'd0) begin
+                        result_q_comb = '0;
+                        result_r_comb = '0;
+                        next_state = FINISHED;
+                    end else if ((denominator & (denominator - 1)) == 32'd0) begin
+                        next_state = SHIFT;
+                    end else begin
+                        g_new = LUT[msb_index(denominator) + 1];
+                        next_iter_cnt = 6'd0;
+                        next_state = DIV_ITER;
+                    end
                 end
             end
 
             SHIFT: begin
                 result_q_comb = n_reg >> msb_index(d_reg);
                 result_r_comb = n_reg & (d_reg - 1);
-                //$display("[newtraph] SHIFT Q=%0d R=%0d", result_q_comb, result_r_comb);
-                next_state = FINISHED;
-            end
-
-            DIV_START: begin
-                // Initial guess 1/(1<<bit_length(D)); bit_length = msb_index + 1
-                g_new = LUT[msb_index(d_reg) + 1];
-                next_iter_cnt = 6'd0;
-                //$display("[newtraph] DIV_START d_reg=%0d bitlen=%0d g_init=%0d (real=1/%0d)", d_reg, msb_index(d_reg)+1, LUT[msb_index(d_reg)+1], 1<<(msb_index(d_reg)+1));
-                next_state = DIV_ITER;
+                done_calc = 1'b1;
+                next_state = START;
             end
 
             DIV_ITER: begin
@@ -133,17 +119,15 @@ module divider_core_newtraph
             end
 
             DIV_FIN: begin
-                // Q = N * (1/D) in 1.31: (n_reg * g_new) >> 31
                 prod_g = 64'(n_reg) * 64'(g_new);
                 result_q_comb = 32'(prod_g >> 31);
                 result_r_comb = n_reg - (d_reg * result_q_comb);
-                //$display("[newtraph] DIV_FIN Q=%0d R=%0d", result_q_comb, result_r_comb);
-                next_state = FINISHED;
+                done_calc = 1'b1;
+                next_state = START;
             end
 
             FINISHED: begin
                 done_calc = 1'b1;
-                //$display("[newtraph] FINISHED done_calc=1");
                 next_state = START;
             end
 
