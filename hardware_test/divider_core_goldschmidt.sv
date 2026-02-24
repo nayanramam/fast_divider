@@ -13,7 +13,7 @@ module divider_core_goldschmidt (
     output logic [31:0] div_remainder
 );
 
-  localparam int N_ITER = 1;  // iterations (convergence for 32-bit)
+  localparam int N_ITER = 2;  // iterations (convergence for 32-bit)
 
   typedef enum logic [1:0] { IDLE, ITER, CORR } state_t;
   state_t state;

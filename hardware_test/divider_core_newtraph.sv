@@ -1,4 +1,4 @@
-// Reduced states: START (latch+dispatch), SHIFT, DIV_ITER, DIV_FIN, FINISHED (early-exit only)
+
 typedef enum logic [2:0] {
     START,
     SHIFT,
@@ -28,7 +28,7 @@ module divider_core_newtraph
     );
 
 
-    localparam int N_ITER = 1;
+    localparam int N_ITER = 6;
 
     logic [WIDTH-1:0] n_reg, d_reg, next_n, next_d;
     logic [WIDTH-1:0] g_prev, g_new;   // 1.31: stored value = real * 2^31 (e.g. 268435456 = 0.125)
