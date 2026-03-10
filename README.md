@@ -1,6 +1,10 @@
 ## How to run
 iverilog -g2012 -s divider_tb   -o sim.vvp divider_core.sv  divider_tb.sv divider_top.sv
 
+* Change name of divider_core.sv to pick core, divider_tb.sv to pick testbench
+* divider_tb.sv has basic smoke tests
+* divider_tb_2.sv runs CRV
+
 vvp sim.vvp
 
 

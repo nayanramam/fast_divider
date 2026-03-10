@@ -145,6 +145,12 @@ module divider_tb;
       d_i         <= d;
       valid_i     <= 1'b1;
 
+      $display("[INPUT] %s", name);
+      $display("  n:      dec=%0d  bin=%32b", $signed(n), $signed(n));
+      $display("  d:      dec=%0d  bin=%32b", $signed(d), $signed(d));
+      $display("  mode:   dec=%0d  bin=%1b  (%s)", mode_u, mode_u, mode_u ? "unsigned" : "signed");
+      $display("  out_type: dec=%0d  bin=%1b  (%s)", want_quot, want_quot, want_quot ? "quotient" : "remainder");
+
       @(posedge clk_i);
       valid_i     <= 1'b0;
 
@@ -160,9 +166,15 @@ module divider_tb;
       end
 
       // Check outputs on the ready pulse cycle
+      $display("[OUTPUT] %s (cycles_to_ready=%0d)", name, cyc);
+      $display("  result:    dec=%0d  bin=%32b", $signed(result), $signed(result));
+      $display("  expected:  dec=%0d  bin=%32b", $signed(exp_res), $signed(exp_res));
+      $display("  error_o:   dec=%0d  bin=%2b", error_o, error_o);
+      $display("  exp_err:   dec=%0d  bin=%2b", exp_err, exp_err);
+
       if (error_o !== exp_err) begin
         $error("[FAIL] %s error mismatch: got %0b exp %0b (diff=%0d)",
-               name, error_o, exp_err, error_o - exp_err);
+               name, $signed(error_o), $signed(exp_err), $signed(error_o) - $signed(exp_err));
         failed = 1'b1;
       end
       if (result !== exp_res) begin
@@ -180,8 +192,8 @@ module divider_tb;
 
       if (!failed) begin
         passed_cases++;
-        $display("[PASS] %s | cycles_to_ready=%0d | err=%0b res=%0d",
-                 name, cyc, error_o, result);
+        $display("[PASS] %s | cycles=%0d | err dec=%0d bin=%2b | res dec=%0d bin=%32b",
+                 name, cyc, error_o, error_o, result, result);
       end
     end
   endtask
@@ -206,6 +218,8 @@ module divider_tb;
     run_case("REM by 0 => r",           1'b0, 1'b0, 32'd123,      32'd0,  50);
     run_case("DIV ovf INT_MIN/-1 => q", 1'b0, 1'b1, 32'h8000_0000,32'hFFFF_FFFF, 50);
     run_case("REM ovf INT_MIN/-1 => r", 1'b0, 1'b0, 32'h8000_0000,32'hFFFF_FFFF, 50);
+
+    // run_case("DIV fail case 1 n=2144716031 d=4226002935" , 1'b0, 1'b1, 32'd2144716031, 32'd4226002935, 50);
 
     // ----- CRV: $urandom-based random transactions (no class randomize) -----
     for (crv_i = 0; crv_i < NUM_RAND_TESTS; crv_i++) begin

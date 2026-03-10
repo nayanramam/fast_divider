@@ -1,7 +1,6 @@
 
 typedef enum logic [2:0] {
     START,
-    SHIFT,
     DIV_ITER,
     DIV_FIN,
     FINISHED

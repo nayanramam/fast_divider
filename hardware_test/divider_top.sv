@@ -59,7 +59,7 @@ module divider_top (
     //========================
     // Divider core instantiation
     //========================
-    divider_core_goldschmidt divider( // pick core here
+    divider_core_newtraph_v2 divider( // pick core here
         .clk(clk_i),
         .rst(rst_i),
         .start_calc(start_calc_int),
@@ -218,7 +218,7 @@ module divider_top (
                             // quotient
                             final_sign <= (n_sign ^ d_sign);
                         end else begin
-                            // remainder: per your requirement, use denominator sign
+                            // remainder: per your requirement, use numerator sign
                             final_sign <= n_sign;
                         end
                     end
