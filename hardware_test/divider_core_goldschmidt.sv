@@ -11,7 +11,7 @@ module divider_core_goldschmidt (
     output logic [31:0] div_remainder
 );
 
-  localparam int N_ITER = 1;  // iterations (convergence for 32-bit)
+  localparam int N_ITER = 3;  // iterations (convergence for 32-bit)
 
   typedef enum logic [1:0] { IDLE, ITER, CORR } state_t;
   state_t state;
@@ -66,19 +66,19 @@ module divider_core_goldschmidt (
               div_remainder <= 32'd0;
               done_calc     <= 1'b1;
               state         <= IDLE;
+            end else if (numerator < denominator) begin
+              // Magnitudes from wrapper: |N| < |D| => truncating quotient is 0.
+              // NR path refines 1/D only; it does not yield q=0 without this.
+              div_output    <= 32'd0;
+              div_remainder <= numerator;
+              done_calc     <= 1'b1;
+              state         <= IDLE;
             end else begin
               n_fp     <= {numerator, 32'b0} >> s_idle;  // fp 32.32
               d_fp     <= d_init_idle;  // fp 1.31
               F_fp     <= (33'b1 << 32) - {1'b0, d_init_idle};  // fp 2.31
               iter_cnt <= 3'd0;
               state    <= ITER;
-              $display("[IDLE->ITER] s_idle:      dec=%0d  bin=%6b", s_idle, s_idle);
-              $display("  d_init_idle: dec=%0d  bin=%32b", d_init_idle, d_init_idle);
-              $display("  n_fp (new):   dec=%0d  bin=%64b", {numerator, 32'b0} >> s_idle, ({numerator, 32'b0} >> s_idle));
-              $display("  d_fp (new):   dec=%0d  bin=%32b", d_init_idle, d_init_idle);
-              $display("  F_fp (new):   dec=%0d  bin=%33b", (33'd1 << 32) - {1'b0, d_init_idle}, (33'd1 << 32) - {1'b0, d_init_idle});
-              $display("  N_lat:        dec=%0d  bin=%32b", numerator, numerator);
-              $display("  D_lat:        dec=%0d  bin=%32b", denominator, denominator);
             end
           end
         end
@@ -94,44 +94,22 @@ module divider_core_goldschmidt (
           iter_cnt <= iter_cnt + 3'd1;
           if (iter_cnt >= N_ITER)
             state <= CORR;
-          $display("[ITER] iter_cnt: dec=%0d  bin=%3b", iter_cnt, iter_cnt);
-          $display("  prod_nF: dec=%0d  bin=%97b", prod_nF, prod_nF);
-          $display("  prod_dF: dec=%0d  bin=%65b", prod_dF, prod_dF);
-          $display("  d_new:   dec=%0d  bin=%32b", d_new, d_new);
-          $display("  n_fp:    dec=%0d  bin=%64b", n_fp, n_fp);
-          $display("  d_fp:    dec=%0d  bin=%32b", d_fp, d_fp);
-          $display("  F_fp:    dec=%0d  bin=%33b", F_fp, F_fp);
         end
 
         CORR: begin
           Q_raw = n_fp[63:32];  // just the integer part
-          $display("[CORR] n_fp:      dec=%0d  bin=%64b", n_fp, n_fp);
-          $display("  Q_raw:   dec=%0d  bin=%32b", Q_raw, Q_raw);
           R_full = {32'b0, N_lat} - (D_lat * Q_raw);
-          $display("  N_lat:   dec=%0d  bin=%32b", N_lat, N_lat);
-          $display("  D_lat:   dec=%0d  bin=%32b", D_lat, D_lat);
-          $display("  R_full:  dec=%0d  bin=%64b", R_full, R_full);
           R_raw  = R_full[31:0];  // 32 bit int part of 64 bit R_full
-          $display("  R_raw:   dec=%0d  bin=%32b", R_raw, R_raw);
           if (R_raw < 32'd0) begin
             div_output <= Q_raw - 32'd1;
             div_remainder <= R_raw + D_lat;
-            $display("  (R_raw < 0 => correction)");
-            $display("  div_output:   dec=%0d  bin=%32b", Q_raw - 32'd1, Q_raw - 32'd1);
-            $display("  div_remainder: dec=%0d  bin=%32b", R_raw + D_lat, R_raw + D_lat);
           end
           else if (R_raw >= D_lat) begin
-            $display("  (R_raw >= D_lat => correction)");
             div_output <= Q_raw + 32'd1;
             div_remainder <= R_raw -  D_lat;
-            $display("  div_output:   dec=%0d  bin=%32b", Q_raw + 32'd1, Q_raw + 32'd1);
-            $display("  div_remainder: dec=%0d  bin=%32b", R_raw - D_lat, R_raw - D_lat);
           end else begin
-            $display("  (R_raw < D_lat => no correction)");
             div_output <= Q_raw;
             div_remainder <= R_raw;
-            $display("  div_output:   dec=%0d  bin=%32b", Q_raw, Q_raw);
-            $display("  div_remainder: dec=%0d  bin=%32b", R_raw, R_raw);
           end
           done_calc <= 1'b1;
           state     <= IDLE;

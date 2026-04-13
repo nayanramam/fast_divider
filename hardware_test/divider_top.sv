@@ -59,7 +59,7 @@ module divider_top (
     //========================
     // Divider core instantiation
     //========================
-    divider_core_newtraph_v2 divider( // pick core here
+    divider_core_newtraph_v3 divider( // pick core here
         .clk(clk_i),
         .rst(rst_i),
         .start_calc(start_calc_int),

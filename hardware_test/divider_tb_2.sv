@@ -107,7 +107,7 @@ module divider_tb;
   // -----------------------
   // CRV: random stimulus via $urandom (Icarus-friendly; no class randomize)
   // -----------------------
-  localparam int NUM_RAND_TESTS = 1000;
+  localparam int NUM_RAND_TESTS = 10000;
   localparam int RAND_TIMEOUT   = 500;
 
   logic [31:0] n_rand, d_rand;
